@@ -15,6 +15,8 @@ from octoprint.server import user_permission
 from octoprint.settings import settings
 from octoprint.util import RepeatedTimer
 
+from .host import HostFactory
+
 ### (Don't forget to remove me)
 # This is a basic skeleton for your plugin's __init__.py. You probably want to adjust the class name of your plugin
 # as well as the plugin mixins it's subclassing from. This is really just a basic skeleton to get you started,
@@ -52,9 +54,14 @@ class HomeassistantPlugin(
         self.mqtt_publish_with_timestamp = None
         self.mqtt_subcribe = None
         self.update_timer = None
+        self.constant_timer = None
+        self.host = HostFactory.get_host_interface()
 
     def handle_timer(self):
         self._generate_printer_status()
+
+    def handle_constant_timer(self):
+        self._generate_status()
 
     ##~~ SettingsPlugin
 
@@ -95,6 +102,12 @@ class HomeassistantPlugin(
 
         if not self.update_timer:
             self.update_timer = RepeatedTimer(60, self.handle_timer, None, None, False)
+
+        if not self.constant_timer:
+            self.constant_timer = RepeatedTimer(
+                30, self.handle_constant_timer, None, None, False
+            )
+            self.constant_timer.start()
 
         # Since retain may not be used it's not always possible to simply tie this to the connected state
         self._generate_device_registration()
@@ -393,6 +406,22 @@ class HomeassistantPlugin(
             },
         )
 
+        ##~~ SoC Temperature (if supported)
+        if self.host:
+            self._generate_sensor(
+                topic="homeassistant/sensor/" + _node_id + "_SOC/config",
+                values={
+                    "name": _node_name + " SoC Temperature",
+                    "uniq_id": _node_id + "_SOC",
+                    "stat_t": "~" + self._generate_topic("temperatureTopic", "soc"),
+                    "unit_of_meas": "°C",
+                    "val_tpl": "{{value_json.temperature|float}}",
+                    "device": _config_device,
+                    "dev_cla": "temperature",
+                    "ic": "mdi:radiator",
+                },
+            )
+
     def _generate_sensor(self, topic, values):
         payload = {
             "avty_t": "~" + self._generate_topic("lwTopic", ""),
@@ -413,6 +442,22 @@ class HomeassistantPlugin(
             "sw": self._plugin_version,
         }
         return _config_device
+
+    def _generate_status(self):
+
+        if not self.host:
+            return
+
+        self._logger.info("TRYING TO GET TEMPERATURE on %s", str(self.host))
+        data = {"temperature": self.host.get_temperature(self._logger)}
+        self._logger.info("Data %s", json.dumps(data))
+
+        if self.mqtt_publish_with_timestamp:
+            self.mqtt_publish_with_timestamp(
+                self._generate_topic("temperatureTopic", "soc", full=True),
+                data,
+                allow_queueing=True,
+            )
 
     def _generate_printer_status(self):
 
@@ -665,7 +710,12 @@ class HomeassistantPlugin(
                     "True",
                     allow_queueing=True,
                 )
-                self.update_timer.start()
+
+                try:
+                    self.update_timer.start()
+                except RuntimeError:
+                    # May already be running, it's ok
+                    pass
 
         elif event in (Events.PRINT_DONE, Events.PRINT_FAILED, Events.PRINT_CANCELLED):
             if self.update_timer:
@@ -674,7 +724,12 @@ class HomeassistantPlugin(
                     "False",
                     allow_queueing=True,
                 )
-                self.update_timer.cancel()
+
+                try:
+                    self.update_timer.cancel()
+                except RuntimeError:
+                    # May already be stopped, it's ok
+                    pass
 
         if event == Events.PRINT_PAUSED:
             self.mqtt_publish(
