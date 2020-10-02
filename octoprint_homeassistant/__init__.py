@@ -95,7 +95,10 @@ class HomeassistantPlugin(
     ##~~ TemplatePlugin mixin
     def get_template_configs(self):
         return [
-            dict(type="settings", name="HomeAssistant")
+            dict(
+                type="settings",
+                custom_bindings=False
+            )
         ]
 
     ##~~ StartupPlugin mixin
