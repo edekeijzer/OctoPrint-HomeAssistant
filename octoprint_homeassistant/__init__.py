@@ -49,6 +49,7 @@ class HomeassistantPlugin(
     octoprint.plugin.EventHandlerPlugin,
     octoprint.plugin.ProgressPlugin,
     octoprint.plugin.WizardPlugin,
+    octoprint.plugin.ReloadNeedingPlugin
 ):
     def __init__(self):
         self._logger = logging.getLogger(__name__)
@@ -74,6 +75,28 @@ class HomeassistantPlugin(
             if _node_uuid:
                 _node_id = (_node_uuid[:6]).upper()
                 self._settings.set(["node_id"], _node_id)
+
+    def on_settings_save(self, data):
+        # Borrowed this from OctoPrint-MQTT plugin
+        old_discovery_topic = self._settings.get(["discovery_topic"])
+        old_unique_id = self._settings.get(["unique_id"])
+        old_node_id = self._settings.get(["node_id"])
+
+        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+
+        new_discovery_topic = self._settings.get(["discovery_topic"])
+        new_unique_id = self._settings.get(["unique_id"])
+        new_node_id = self._settings.get(["node_id"])
+
+        if old_discovery_topic != new_discovery_topic or old_unique_id != new_unique_id or old_node_id != new_node_id:
+            # Something changed, reconnect to re-publish
+            self.on_after_startup()
+
+    ##~~ TemplatePlugin mixin
+    def get_template_configs(self):
+        return [
+            dict(type="settings", name="HomeAssistant")
+        ]
 
     ##~~ StartupPlugin mixin
 
@@ -539,6 +562,7 @@ class HomeassistantPlugin(
 
         _node_name = s.get(["appearance", "name"], defaults=name_defaults)
         _node_id = self._settings.get(["node_id"])
+        _discovery_topic = self._settings.get(["discovery_topic"])
 
         _config_device = self._generate_device_config(_node_id, _node_name)
 

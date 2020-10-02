@@ -1,0 +1,14 @@
+a<form class="form-horizontal" id="settings_plugin_homeassistant">
+    <div class="control-group">
+        <label class="control-label">{{ _('Discovery topic') }}</label>
+        <div class="controls">
+            <input type="text" class="input-large" data-bind="value: settings.plugins.homeassistant.discovery_topic">
+            <span class="help-block">{{ _('The MQTT topic (prefix) on which HomeAssistant is listening for auto-discovery.') }}</span>
+        </div>
+        <label class="control-label">{{ _('Unique ID') }}</label>
+        <div class="controls">
+            <input type="text" class="input-large" data-bind="value: settings.plugins.homeassistant.unique_id">
+            <span class="help-block">{{ _('The unique ID of this device for HomeAssistant.') }}</span>
+        </div>
+    </div>
+</form>
