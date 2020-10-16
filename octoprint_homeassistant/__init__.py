@@ -401,6 +401,17 @@ class HomeassistantPlugin(
                 },
             )
 
+            if subscribe:
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "tool" + str(x) + "/temperature", full=True),
+                    self._on_temp,
+                )
+
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "tool" + str(x) + "/mode", full=True),
+                    self._on_temp_mode,
+                )
+
             self._generate_sensor(
                 topic=_discovery_topic
                 + "/climate/"
@@ -428,13 +439,11 @@ class HomeassistantPlugin(
                     "mode_stat_tpl":"",
                     "mode_cmd_t":"~"
                     + self._generate_topic("controlTopic", "tool" + str(x))
-                    + "/mode/set",
-                    "min_temp":0,
+                    + "/mode,
+                    "min_temp":150,
                     "max_temp":250,
                     "temp_step":5,
                     "dev": _config_device,
-                    "dev_cla": "temperature",
-                    "ic": "mdi:pirate",
                 },
             )
 
@@ -567,6 +576,14 @@ class HomeassistantPlugin(
                 sarge.run(shutdown_command, async_=True)
             except Exception as e:
                 self._logger.info("Unable to run shutdown command: " + str(e))
+
+    def _on_temp(self, topic, message, retained=None, qos=None, *args, **kwargs):
+        message = message.decode()
+        self._logger.debug("Temperature message received: " + message)
+
+    def _on_temp_mode(self, topic, message, retained=None, qos=None, *args, **kwargs):
+        message = message.decode()
+        self._logger.debug("Temperature mode message received: " + message)
 
     def _on_home(self, topic, message, retained=None, qos=None, *args, **kwargs):
         self._logger.debug("Homing printer: " + str(message))
