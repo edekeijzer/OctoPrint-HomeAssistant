@@ -401,6 +401,43 @@ class HomeassistantPlugin(
                 },
             )
 
+            self._generate_sensor(
+                topic=_discovery_topic
+                + "/climate/"
+                + _node_id
+                + "_TOOL"
+                + str(x)
+                + "_THERM"
+                + "/config",
+                values={
+                    "name": _node_name + " Tool " + str(x) + " Thermostat",
+                    "uniq_id": _node_id + "_TOOL" + str(x) + "_THERM",
+                    "curr_temp_t": "~"
+                    + self._generate_topic("temperatureTopic", "tool" + str(x)),
+                    "curr_temp_tpl":"{{value_json.actual|float}}",
+                    "temp_stat_t": "~"
+                    + self._generate_topic("temperatureTopic", "tool" + str(x)),
+                    "temp_stat_tpl": "{{value_json.target|float}}",
+                    "temp_cmd_t": "~"
+                    + self._generate_topic("controlTopic", "tool" + str(x))
+                    + "/temperature",
+                    "modes":["off","heat"],
+                    "mode_stat_t":"~"
+                    + self._generate_topic("hassTopic", "tool" + str(x))
+                    + "/mode",
+                    "mode_stat_tpl":"",
+                    "mode_cmd_t":"~"
+                    + self._generate_topic("controlTopic", "tool" + str(x))
+                    + "/mode/set",
+                    "min_temp":0,
+                    "max_temp":250,
+                    "temp_step":5,
+                    "dev": _config_device,
+                    "dev_cla": "temperature",
+                    "ic": "mdi:pirate",
+                },
+            )
+
         ##~~ Bed Temperature
         self._generate_sensor(
             topic=_discovery_topic + "/sensor/" + _node_id + "_BED/config",
