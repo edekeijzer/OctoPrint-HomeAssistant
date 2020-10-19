@@ -9,6 +9,7 @@ import re
 import threading
 import time
 
+import psutil
 import octoprint.plugin
 from octoprint.events import Events, eventManager
 from octoprint.server import user_permission
@@ -36,6 +37,7 @@ MQTT_DEFAULTS = dict(
     )
 )
 
+
 class HomeassistantPlugin(
     octoprint.plugin.SettingsPlugin,
     octoprint.plugin.TemplatePlugin,
@@ -50,9 +52,13 @@ class HomeassistantPlugin(
         self.mqtt_publish_with_timestamp = None
         self.mqtt_subcribe = None
         self.update_timer = None
+        self.constant_timer = None
 
     def handle_timer(self):
         self._generate_printer_status()
+
+    def handle_constant_timer(self):
+        self._generate_status()
 
     ##~~ SettingsPlugin
 
@@ -79,12 +85,7 @@ class HomeassistantPlugin(
     ##~~ TemplatePlugin mixin
 
     def get_template_configs(self):
-        return [
-            dict(
-                type="settings",
-                custom_bindings=False
-            )
-        ]
+        return [dict(type="settings", custom_bindings=False)]
 
     ##~~ StartupPlugin mixin
 
@@ -122,6 +123,12 @@ class HomeassistantPlugin(
 
         if not self.update_timer:
             self.update_timer = RepeatedTimer(60, self.handle_timer, None, None, False)
+
+        if not self.constant_timer:
+            self.constant_timer = RepeatedTimer(
+                30, self.handle_constant_timer, None, None, False
+            )
+            self.constant_timer.start()
 
         # Since retain may not be used it's not always possible to simply tie this to the connected state
         self._generate_device_registration()
@@ -194,7 +201,9 @@ class HomeassistantPlugin(
         _device_manufacturer = self._settings.get(["device_manufacturer"])
         _device_model = self._settings.get(["device_model"])
 
-        _config_device = self._generate_device_config(_node_id, _node_name, _device_manufacturer, _device_model)
+        _config_device = self._generate_device_config(
+            _node_id, _node_name, _device_manufacturer, _device_model
+        )
 
         ##~~ Configure Connected Sensor
         self._generate_sensor(
@@ -258,6 +267,8 @@ class HomeassistantPlugin(
             values={
                 "name": _node_name + " Print Progress",
                 "uniq_id": _node_id + "_PRINTING_P",
+                "json_attr_t": "~" + self._generate_topic("hassTopic", "printing"),
+                "json_attr_tpl": "{{value_json.progress|tojson}}",
                 "stat_t": "~" + self._generate_topic("progressTopic", "printing"),
                 "unit_of_meas": "%",
                 "val_tpl": "{{value_json.progress|float|default(0,true)}}",
@@ -429,6 +440,21 @@ class HomeassistantPlugin(
             },
         )
 
+        ##~~ SoC Temperature (if supported)
+        self._generate_sensor(
+            topic="homeassistant/sensor/" + _node_id + "_SOC/config",
+            values={
+                "name": _node_name + " SoC Temperature",
+                "uniq_id": _node_id + "_SOC",
+                "stat_t": "~" + self._generate_topic("temperatureTopic", "soc"),
+                "unit_of_meas": "°C",
+                "val_tpl": "{{value_json.temperature|float|round(1)}}",
+                "device": _config_device,
+                "dev_cla": "temperature",
+                "ic": "mdi:radiator",
+            },
+        )
+
     def _generate_sensor(self, topic, values):
         payload = {
             "avty_t": "~" + self._generate_topic("lwTopic", ""),
@@ -439,7 +465,9 @@ class HomeassistantPlugin(
         payload.update(values)
         self.mqtt_publish(topic, payload, allow_queueing=True)
 
-    def _generate_device_config(self, _node_id, _node_name, _device_manufacturer, _device_model):
+    def _generate_device_config(
+        self, _node_id, _node_name, _device_manufacturer, _device_model
+    ):
         _config_device = {
             "ids": [_node_id],
             "cns": [["mac", self._get_mac_address()]],
@@ -449,6 +477,29 @@ class HomeassistantPlugin(
             "sw": "HomeAssistant Discovery for OctoPrint " + self._plugin_version,
         }
         return _config_device
+
+    def _get_cpu_temp(self):
+        if hasattr(psutil, "sensors_temperatures"):
+            temps = psutil.sensors_temperatures()
+            if temps:
+                if "coretemp" in temps:
+                    return temps["coretemp"][0].current
+                if "cpu-thermal" in temps:
+                    return temps["cpu-thermal"][0].current
+                if "cpu_thermal" in temps:
+                    return temps["cpu_thermal"][0].current
+        return None
+
+    def _generate_status(self):
+
+        data = {"temperature": self._get_cpu_temp()}
+
+        if self.mqtt_publish_with_timestamp:
+            self.mqtt_publish_with_timestamp(
+                self._generate_topic("temperatureTopic", "soc", full=True),
+                data,
+                allow_queueing=True,
+            )
 
     def _generate_printer_status(self):
 
@@ -485,15 +536,12 @@ class HomeassistantPlugin(
         state_connected = "Disconnected" if state == "Closed" else "Connected"
         # Function can be called by on_event before on_after_startup has run.
         # This will throw a TypeError since self.mqtt_publish is still null.
-        try:
+        if self.mqtt_publish:
             self.mqtt_publish(
                 self._generate_topic("hassTopic", "Connected", full=True),
                 state_connected,
                 allow_queueing=True,
             )
-        except TypeError:
-            self._logger.warning("mqtt_publish helper is not yet defined, not publishing connection state " + state_connected)
-            pass
 
     def _on_emergency_stop(
         self, topic, message, retained=None, qos=None, *args, **kwargs
@@ -569,7 +617,9 @@ class HomeassistantPlugin(
         _device_manufacturer = self._settings.get(["device_manufacturer"])
         _device_model = self._settings.get(["device_model"])
 
-        _config_device = self._generate_device_config(_node_id, _node_name, _device_manufacturer, _device_model)
+        _config_device = self._generate_device_config(
+            _node_id, _node_name, _device_manufacturer, _device_model
+        )
 
         # Emergency stop
         if subscribe:
@@ -722,7 +772,12 @@ class HomeassistantPlugin(
                     "True",
                     allow_queueing=True,
                 )
-                self.update_timer.start()
+
+                try:
+                    self.update_timer.start()
+                except RuntimeError:
+                    # May already be running, it's ok
+                    pass
 
         elif event in (Events.PRINT_DONE, Events.PRINT_FAILED, Events.PRINT_CANCELLED):
             if self.update_timer:
@@ -731,7 +786,12 @@ class HomeassistantPlugin(
                     "False",
                     allow_queueing=True,
                 )
-                self.update_timer.cancel()
+
+                try:
+                    self.update_timer.cancel()
+                except RuntimeError:
+                    # May already be stopped, it's ok
+                    pass
 
         if event == Events.PRINT_PAUSED:
             self.mqtt_publish(
@@ -799,8 +859,10 @@ class HomeassistantPlugin(
             )
         )
 
+
 __plugin_name__ = "HomeAssistant Discovery"
 __plugin_pythoncompat__ = ">=2.7,<4"  # python 2 and 3
+
 
 def __plugin_load__():
     global __plugin_implementation__
