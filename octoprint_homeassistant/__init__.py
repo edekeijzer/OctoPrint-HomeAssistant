@@ -940,6 +940,15 @@ class HomeassistantPlugin(
             )
         )
 
+    ##~~ Temperatures Received hook
+
+    def publish_temperatures(comm, parsed_temps):
+        # This hook is meant to parse the temperatures sent from the printer before OctoPrint will do anything with them
+        # so we have to return the temps (unmodified)
+        for k, v in parsed_temps.items():
+            self._logger.debug("Values for " + k + " are " + str(v[0]) + " and " + str(v[1]))
+        return parsed_temps
+
 
 __plugin_name__ = "HomeAssistant Discovery"
 __plugin_pythoncompat__ = ">=2.7,<4"  # python 2 and 3
@@ -951,5 +960,6 @@ def __plugin_load__():
 
     global __plugin_hooks__
     __plugin_hooks__ = {
-        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
+        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
+        "octoprint.comm.protocol.temperatures.received": publish_temperatures,
     }
