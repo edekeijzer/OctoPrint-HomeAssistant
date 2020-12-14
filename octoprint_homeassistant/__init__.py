@@ -410,52 +410,6 @@ class HomeassistantPlugin(
                 },
             )
 
-            self._generate_sensor(
-                topic=_discovery_topic
-                + "/climate/"
-                + _node_id
-                + "_TOOL"
-                + str(x)
-                + "_THERM"
-                + "/config",
-                values={
-                    "name": _node_name + " Tool " + str(x) + " Thermostat",
-                    "uniq_id": _node_id + "_TOOL" + str(x) + "_THERM",
-                    "curr_temp_t": "~"
-                    + self._generate_topic("temperatureTopic", "tool" + str(x)),
-                    "curr_temp_tpl":"{{value_json.actual|float}}",
-                    "temp_stat_t": "~"
-                    + self._generate_topic("temperatureTopic", "tool" + str(x)),
-                    "temp_stat_tpl": "{{value_json.target|float}}",
-                    "temp_cmd_t": "~"
-                    + self._generate_topic("controlTopic", "tool" + str(x))
-                    + "/temperature",
-                    "modes":["off","heat"],
-                    "mode_stat_t":"~"
-                    + self._generate_topic("hassTopic", "tool" + str(x))
-                    + "/mode",
-                    "mode_stat_tpl":"",
-                    "mode_cmd_t":"~"
-                    + self._generate_topic("controlTopic", "tool" + str(x))
-                    + "/mode",
-                    "min_temp":150,
-                    "max_temp":250,
-                    "temp_step":5,
-                    "dev": _config_device,
-                },
-            )
-
-            if subscribe:
-                self.mqtt_subscribe(
-                    self._generate_topic("controlTopic", "tool" + str(x) + "/temperature", full=True),
-                    self._on_temp,
-                )
-
-                self.mqtt_subscribe(
-                    self._generate_topic("controlTopic", "tool" + str(x) + "/mode", full=True),
-                    self._on_temp_mode,
-                )
-
         ##~~ Bed Temperature
         self._generate_sensor(
             topic=_discovery_topic + "/sensor/" + _node_id + "_BED/config",
@@ -483,50 +437,6 @@ class HomeassistantPlugin(
                 "ic": "mdi:radiator",
             },
         )
-
-        self._generate_sensor(
-            topic=_discovery_topic
-            + "/climate/"
-            + _node_id
-            + "_BED_THERM"
-            + "/config",
-            values={
-                "name": _node_name + " Bed Thermostat",
-                "uniq_id": _node_id + "_BED_THERM",
-                "curr_temp_t": "~"
-                + self._generate_topic("temperatureTopic", "bed"),
-                "curr_temp_tpl":"{{value_json.actual|float}}",
-                "temp_stat_t": "~"
-                + self._generate_topic("temperatureTopic", "bed"),
-                "temp_stat_tpl": "{{value_json.target|float}}",
-                "temp_cmd_t": "~"
-                + self._generate_topic("controlTopic", "bed")
-                + "/temperature",
-                "modes":["off","heat"],
-                "mode_stat_t":"~"
-                + self._generate_topic("hassTopic", "bed")
-                + "/mode",
-                "mode_stat_tpl":"",
-                "mode_cmd_t":"~"
-                + self._generate_topic("controlTopic", "bed")
-                + "/mode",
-                "min_temp":50,
-                "max_temp":150,
-                "temp_step":5,
-                "dev": _config_device,
-            },
-        )
-
-        if subscribe:
-            self.mqtt_subscribe(
-                self._generate_topic("controlTopic", "bed/temperature", full=True),
-                self._on_temp,
-            )
-
-            self.mqtt_subscribe(
-                self._generate_topic("controlTopic", "bed/mode", full=True),
-                self._on_temp_mode,
-            )
 
         ##~~ Chamber Temperature
         _h = self._printer_profile_manager.get_current_or_default()["heatedChamber"]
@@ -841,6 +751,144 @@ class HomeassistantPlugin(
             },
         )
 
+        _e = self._printer_profile_manager.get_current_or_default()["extruder"]["count"]
+        for x in range(_e):
+            self._generate_sensor(
+                topic=_discovery_topic
+                + "/climate/"
+                + _node_id
+                + "_TOOL"
+                + str(x)
+                + "_THERM"
+                + "/config",
+                values={
+                    "name": _node_name + " Tool " + str(x) + " Thermostat",
+                    "uniq_id": _node_id + "_TOOL" + str(x) + "_THERM",
+                    "curr_temp_t": "~"
+                    + self._generate_topic("temperatureTopic", "tool" + str(x)),
+                    "curr_temp_tpl":"{{value_json.actual|float}}",
+                    "temp_stat_t": "~"
+                    + self._generate_topic("temperatureTopic", "tool" + str(x)),
+                    "temp_stat_tpl": "{{value_json.target|float}}",
+                    "temp_cmd_t": "~"
+                    + self._generate_topic("controlTopic", "tool" + str(x))
+                    + "/temperature",
+                    "modes":["off","heat"],
+                    "mode_stat_t":"~"
+                    + self._generate_topic("hassTopic", "tool" + str(x))
+                    + "/mode",
+                    "mode_stat_tpl":"",
+                    "mode_cmd_t":"~"
+                    + self._generate_topic("controlTopic", "tool" + str(x))
+                    + "/mode",
+                    "min_temp":150,
+                    "max_temp":250,
+                    "temp_step":5,
+                    "dev": _config_device,
+                },
+            )
+
+            if subscribe:
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "tool" + str(x) + "/temperature", full=True),
+                    self._on_temp,
+                )
+
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "tool" + str(x) + "/mode", full=True),
+                    self._on_temp_mode,
+                )
+
+        self._generate_sensor(
+            topic=_discovery_topic
+            + "/climate/"
+            + _node_id
+            + "_BED_THERM"
+            + "/config",
+            values={
+                "name": _node_name + " Bed Thermostat",
+                "uniq_id": _node_id + "_BED_THERM",
+                "curr_temp_t": "~"
+                + self._generate_topic("temperatureTopic", "bed"),
+                "curr_temp_tpl":"{{value_json.actual|float}}",
+                "temp_stat_t": "~"
+                + self._generate_topic("temperatureTopic", "bed"),
+                "temp_stat_tpl": "{{value_json.target|float}}",
+                "temp_cmd_t": "~"
+                + self._generate_topic("controlTopic", "bed")
+                + "/temperature",
+                "modes":["off","heat"],
+                "mode_stat_t":"~"
+                + self._generate_topic("hassTopic", "bed")
+                + "/mode",
+                "mode_stat_tpl":"",
+                "mode_cmd_t":"~"
+                + self._generate_topic("controlTopic", "bed")
+                + "/mode",
+                "min_temp":50,
+                "max_temp":150,
+                "temp_step":5,
+                "dev": _config_device,
+            },
+        )
+
+        if subscribe:
+            self.mqtt_subscribe(
+                self._generate_topic("controlTopic", "bed/temperature", full=True),
+                self._on_temp,
+            )
+
+            self.mqtt_subscribe(
+                self._generate_topic("controlTopic", "bed/mode", full=True),
+                self._on_temp_mode,
+            )
+
+        _h = self._printer_profile_manager.get_current_or_default()["heatedChamber"]
+        if _h:
+            self._generate_sensor(
+                topic=_discovery_topic
+                + "/climate/"
+                + _node_id
+                + "_CHAMBER_THERM"
+                + "/config",
+                values={
+                    "name": _node_name + " Chamber Thermostat",
+                    "uniq_id": _node_id + "_CHAMBER_THERM",
+                    "curr_temp_t": "~"
+                    + self._generate_topic("temperatureTopic", "chamber"),
+                    "curr_temp_tpl":"{{value_json.actual|float}}",
+                    "temp_stat_t": "~"
+                    + self._generate_topic("temperatureTopic", "chamber"),
+                    "temp_stat_tpl": "{{value_json.target|float}}",
+                    "temp_cmd_t": "~"
+                    + self._generate_topic("controlTopic", "chamber")
+                    + "/temperature",
+                    "modes":["off","heat"],
+                    "mode_stat_t":"~"
+                    + self._generate_topic("hassTopic", "chamber")
+                    + "/mode",
+                    "mode_stat_tpl":"",
+                    "mode_cmd_t":"~"
+                    + self._generate_topic("controlTopic", "chamber")
+                    + "/mode",
+                    "min_temp":0,
+                    "max_temp":100,
+                    "temp_step":5,
+                    "dev": _config_device,
+                },
+            )
+
+            if subscribe:
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "chamber/temperature", full=True),
+                    self._on_temp,
+                )
+
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "chamber/mode", full=True),
+                    self._on_temp_mode,
+                )
+
         # Command topics that don't have a suitable sensor configuration. These can be used
         # through the MQTT.publish service call though.
         if subscribe:
@@ -993,7 +1041,7 @@ class HomeassistantPlugin(
         # so we have to return the temps (unmodified)
         for k, v in parsed_temps.items():
             self._logger.debug("Values for " + k + " are " + str(v[0]) + " and " + str(v[1]))
-            return dict((k, v)
+            #return dict(k, v)
         return parsed_temps
 
 
