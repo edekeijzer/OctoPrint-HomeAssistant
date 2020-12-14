@@ -612,11 +612,11 @@ class HomeassistantPlugin(
         heater = value.replace(self._generate_topic("controlTopic", ""), "").replace("/temperature", "")
         self._printer.set_temperature(heater, value)
 
-    # def _on_temp_mode(self, topic, message, retained=None, qos=None, *args, **kwargs):
-    #     value = message.decode()
-    #     self._logger.debug("Temperature mode message received: " + value)
-    #     if value == "off":
-    #         self._printer.set_temperature(heater, 0)
+    def _on_temp_mode(self, topic, message, retained=None, qos=None, *args, **kwargs):
+        value = message.decode()
+        self._logger.debug("Temperature mode message received: " + value)
+        if value == "off":
+            self._printer.set_temperature(heater, 0)
 
     def _on_home(self, topic, message, retained=None, qos=None, *args, **kwargs):
         self._logger.debug("Homing printer: " + str(message))
@@ -775,14 +775,14 @@ class HomeassistantPlugin(
                     "temp_cmd_t": "~"
                     + self._generate_topic("controlTopic", "tool" + str(x))
                     + "/temperature",
-                    # "modes":["off","heat"],
-                    # "mode_stat_t":"~"
-                    # + self._generate_topic("hassTopic", "tool" + str(x))
-                    # + "/mode",
-                    # "mode_stat_tpl":"",
-                    # "mode_cmd_t":"~"
-                    # + self._generate_topic("controlTopic", "tool" + str(x))
-                    # + "/mode",
+                    "modes":["off","heat"],
+                    "mode_stat_t":"~"
+                    + self._generate_topic("hassTopic", "tool" + str(x))
+                    + "/mode",
+                    "mode_stat_tpl":"",
+                    "mode_cmd_t":"~"
+                    + self._generate_topic("controlTopic", "tool" + str(x))
+                    + "/mode",
                     "min_temp":0,
                     "max_temp":250,
                     "temp_step":5,
@@ -796,10 +796,10 @@ class HomeassistantPlugin(
                     self._on_temp,
                 )
 
-                # self.mqtt_subscribe(
-                #     self._generate_topic("controlTopic", "tool" + str(x) + "/mode", full=True),
-                #     self._on_temp_mode,
-                # )
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "tool" + str(x) + "/mode", full=True),
+                    self._on_temp_mode,
+                )
 
         self._generate_sensor(
             topic=_discovery_topic
@@ -819,14 +819,14 @@ class HomeassistantPlugin(
                 "temp_cmd_t": "~"
                 + self._generate_topic("controlTopic", "bed")
                 + "/temperature",
-                # "modes":["off","heat"],
-                # "mode_stat_t":"~"
-                # + self._generate_topic("hassTopic", "bed")
-                # + "/mode",
-                # "mode_stat_tpl":"",
-                # "mode_cmd_t":"~"
-                # + self._generate_topic("controlTopic", "bed")
-                # + "/mode",
+                "modes":["off","heat"],
+                "mode_stat_t":"~"
+                + self._generate_topic("hassTopic", "bed")
+                + "/mode",
+                "mode_stat_tpl":"",
+                "mode_cmd_t":"~"
+                + self._generate_topic("controlTopic", "bed")
+                + "/mode",
                 "min_temp":0,
                 "max_temp":150,
                 "temp_step":5,
@@ -840,10 +840,10 @@ class HomeassistantPlugin(
                 self._on_temp,
             )
 
-            # self.mqtt_subscribe(
-            #     self._generate_topic("controlTopic", "bed/mode", full=True),
-            #     self._on_temp_mode,
-            # )
+            self.mqtt_subscribe(
+                self._generate_topic("controlTopic", "bed/mode", full=True),
+                self._on_temp_mode,
+            )
 
         _h = self._printer_profile_manager.get_current_or_default()["heatedChamber"]
         if _h:
@@ -865,14 +865,14 @@ class HomeassistantPlugin(
                     "temp_cmd_t": "~"
                     + self._generate_topic("controlTopic", "chamber")
                     + "/temperature",
-                    # "modes":["off","heat"],
-                    # "mode_stat_t":"~"
-                    # + self._generate_topic("hassTopic", "chamber")
-                    # + "/mode",
-                    # "mode_stat_tpl":"",
-                    # "mode_cmd_t":"~"
-                    # + self._generate_topic("controlTopic", "chamber")
-                    # + "/mode",
+                    "modes":["off","heat"],
+                    "mode_stat_t":"~"
+                    + self._generate_topic("hassTopic", "chamber")
+                    + "/mode",
+                    "mode_stat_tpl":"",
+                    "mode_cmd_t":"~"
+                    + self._generate_topic("controlTopic", "chamber")
+                    + "/mode",
                     "min_temp":0,
                     "max_temp":100,
                     "temp_step":5,
@@ -886,10 +886,10 @@ class HomeassistantPlugin(
                     self._on_temp,
                 )
 
-                # self.mqtt_subscribe(
-                #     self._generate_topic("controlTopic", "chamber/mode", full=True),
-                #     self._on_temp_mode,
-                # )
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "chamber/mode", full=True),
+                    self._on_temp_mode,
+                )
 
         # Command topics that don't have a suitable sensor configuration. These can be used
         # through the MQTT.publish service call though.
@@ -1058,12 +1058,12 @@ class HomeassistantPlugin(
                 allow_queueing=True,
             )
 
-            # data = "heat" if target_temp > 0 else "off"
-            # self.mqtt_publish_with_timestamp(
-            #     self._generate_topic("hassTopic", subject) + "/mode"
-            #     data,
-            #     allow_queueing=True,
-            # )
+            data = "heat" if target_temp > 0 else "off"
+            self.mqtt_publish_with_timestamp(
+                self._generate_topic("hassTopic", subject) + "/mode"
+                data,
+                allow_queueing=True,
+            )
         return parsed_temps
 
 
