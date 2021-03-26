@@ -121,17 +121,6 @@ class HomeassistantPlugin(
                     self._on_mqtt_message,
                 )
 
-            self.snapshot_enabled = self._settings.global_get(
-                ["webcam", "timelapseEnabled"]
-            )
-            if self.snapshot_enabled:
-                self.snapshot_path = self._settings.global_get(
-                    ["webcam", "snapshot"]
-                )
-                if not self.snapshot_path:
-                    self.snapshot_enabled = False
-
-
         if not self.update_timer:
             self.update_timer = RepeatedTimer(60, self.handle_timer, None, None, False)
 
@@ -617,23 +606,6 @@ class HomeassistantPlugin(
             except Exception as e:
                 self._logger.info("Unable to run shutdown command: " + str(e))
 
-    def _on_camera(
-        self, topic, message, retained=None, qos=None, *args, **kwargs
-    ):
-        self._logger.debug("Camera snapshot message received: " + str(message))
-        if self.snapshot_enabled:
-            import urllib.request as urlreq
-            url_handle = urlreq.urlopen(self.snapshot_path)
-            file_content = url_handle.read()
-            url_handle.close()
-            self.mqtt_publish(
-                self._generate_topic("baseTopic", "camera", full=True),
-                file_content,
-                allow_queueing=False,
-                raw=True,
-            )
-            
-
     def _on_home(self, topic, message, retained=None, qos=None, *args, **kwargs):
         self._logger.debug("Homing printer: " + str(message))
         if message:
@@ -769,24 +741,6 @@ class HomeassistantPlugin(
             },
         )
 
-        # Camera output
-        if self.snapshot_enabled:
-            if subscribe:
-                self.mqtt_subscribe(
-                    self._generate_topic("controlTopic", "camera", full=True),
-                    self._on_camera,
-                )
-
-            self._generate_sensor(
-                topic=_discovery_topic + "/camera/" + _node_id + "_CAMERA/config",
-                values={
-                    "name": _node_name + " Camera",
-                    "uniq_id": _node_id + "_CAMERA",
-                    "device": _config_device,
-                    "topic": self._generate_topic("baseTopic", "camera"),
-                },
-            )
-
         # Command topics that don't have a suitable sensor configuration. These can be used
         # through the MQTT.publish service call though.
         if subscribe:
@@ -813,11 +767,7 @@ class HomeassistantPlugin(
                 Events.ERROR,
                 Events.PRINTER_STATE_CHANGED,
             ),
-            files=(
-                Events.FILE_SELECTED,
-                Events.FILE_DESELECTED,
-                Events.CAPTURE_DONE,
-            ),
+            files=(Events.FILE_SELECTED, Events.FILE_DESELECTED),
             status=(
                 Events.PRINT_STARTED,
                 Events.PRINT_FAILED,
@@ -883,18 +833,6 @@ class HomeassistantPlugin(
                 "False",
                 allow_queueing=True,
             )
-
-        if event == Events.CAPTURE_DONE:
-            file_handle = open(payload["file"], 'rb')
-            file_content = file_handle.read()
-            file_handle.close()
-            self.mqtt_publish(
-                self._generate_topic("baseTopic", "camera", full=True),
-                file_content,
-                allow_queueing=False,
-                raw=True,
-            )
-
 
     ##~~ ProgressPlugin API
 
