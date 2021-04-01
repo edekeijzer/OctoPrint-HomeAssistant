@@ -122,7 +122,9 @@ class HomeassistantPlugin(
                 )
 
         # PSUControl helpers
-        psu_helpers = self._plugin_manager.get_helpers("psucontrol", "turn_psu_on", "turn_psu_off", "get_psu_state")
+        psu_helpers = self._plugin_manager.get_helpers(
+            "psucontrol", "turn_psu_on", "turn_psu_off", "get_psu_state"
+        )
 
         self.psucontrol_enabled = True
 
@@ -133,21 +135,27 @@ class HomeassistantPlugin(
                 self.get_psu_state = psu_helpers["get_psu_state"]
                 self._logger.debug("Setup get_psu_state helper")
             else:
-                self._logger.error("Helper get_psu_state not found, disabling PSUControl integration")
+                self._logger.error(
+                    "Helper get_psu_state not found, disabling PSUControl integration"
+                )
                 self.psucontrol_enabled = False
 
             if "turn_psu_on" in psu_helpers:
                 self.turn_psu_on = psu_helpers["turn_psu_on"]
                 self._logger.debug("Setup turn_psu_on helper")
             else:
-                self._logger.error("Helper turn_psu_on not found, disabling PSUControl integration")
+                self._logger.error(
+                    "Helper turn_psu_on not found, disabling PSUControl integration"
+                )
                 self.psucontrol_enabled = False
 
             if "turn_psu_off" in psu_helpers:
                 self.turn_psu_off = psu_helpers["turn_psu_off"]
                 self._logger.debug("Setup turn_psu_off helper")
             else:
-                self._logger.error("Helper turn_psu_on not found, disabling PSUControl integration")
+                self._logger.error(
+                    "Helper turn_psu_on not found, disabling PSUControl integration"
+                )
                 self.psucontrol_enabled = False
         else:
             self._logger.info("PSUControl helpers not found")
@@ -618,7 +626,10 @@ class HomeassistantPlugin(
         if self.psucontrol_enabled:
             if psu_state is None:
                 psu_state = self.get_psu_state()
-                self._logger.debug("No psu_state specified, state retrieved from helper: " + str(psu_state))
+                self._logger.debug(
+                    "No psu_state specified, state retrieved from helper: "
+                    + str(psu_state)
+                )
             self.mqtt_publish(
                 self._generate_topic("hassTopic", "psu_state", full=True),
                 str(psu_state),
@@ -840,6 +851,8 @@ class HomeassistantPlugin(
                     "pl_off": "False",
                     "device": _config_device,
                     "ic": "mdi:flash",
+                },
+            )
 
         # Camera output
         if self.snapshot_enabled:
@@ -976,7 +989,10 @@ class HomeassistantPlugin(
                 allow_queueing=True,
             )
 
-        if event == Events.PLUGIN_PSUCONTROL_PSU_STATE_CHANGED and self.psucontrol_enabled:
+        if (
+            event == Events.PLUGIN_PSUCONTROL_PSU_STATE_CHANGED
+            and self.psucontrol_enabled
+        ):
             self._generate_psu_state(payload["psu_state"])
 
         if event == Events.CAPTURE_DONE:
