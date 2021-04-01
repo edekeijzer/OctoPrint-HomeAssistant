@@ -615,15 +615,15 @@ class HomeassistantPlugin(
             )
 
     def _generate_psu_state(self, psu_state=None):
-            if self.psucontrol_enabled:
-                if psu_state is None:
-                    psu_state = self.get_psu_state()
-                    self._logger.debug("No psu_state specified, state retrieved from helper: " + str(psu_state))
-                self.mqtt_publish(
-                    self._generate_topic("hassTopic", "psu_state", full=True),
-                    str(psu_state),
-                    allow_queueing=True,
-                )
+        if self.psucontrol_enabled:
+            if psu_state is None:
+                psu_state = self.get_psu_state()
+                self._logger.debug("No psu_state specified, state retrieved from helper: " + str(psu_state))
+            self.mqtt_publish(
+                self._generate_topic("hassTopic", "psu_state", full=True),
+                str(psu_state),
+                allow_queueing=True,
+            )
 
     def _on_emergency_stop(
         self, topic, message, retained=None, qos=None, *args, **kwargs
