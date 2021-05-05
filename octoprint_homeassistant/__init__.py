@@ -121,6 +121,55 @@ class HomeassistantPlugin(
                     self._on_mqtt_message,
                 )
 
+        # PSUControl helpers
+        psu_helpers = self._plugin_manager.get_helpers(
+            "psucontrol", "turn_psu_on", "turn_psu_off", "get_psu_state"
+        )
+
+        self.psucontrol_enabled = True
+
+        if psu_helpers:
+            self._logger.info("PSUControl helpers found")
+
+            if "get_psu_state" in psu_helpers:
+                self.get_psu_state = psu_helpers["get_psu_state"]
+                self._logger.debug("Setup get_psu_state helper")
+            else:
+                self._logger.error(
+                    "Helper get_psu_state not found, disabling PSUControl integration"
+                )
+                self.psucontrol_enabled = False
+
+            if "turn_psu_on" in psu_helpers:
+                self.turn_psu_on = psu_helpers["turn_psu_on"]
+                self._logger.debug("Setup turn_psu_on helper")
+            else:
+                self._logger.error(
+                    "Helper turn_psu_on not found, disabling PSUControl integration"
+                )
+                self.psucontrol_enabled = False
+
+            if "turn_psu_off" in psu_helpers:
+                self.turn_psu_off = psu_helpers["turn_psu_off"]
+                self._logger.debug("Setup turn_psu_off helper")
+            else:
+                self._logger.error(
+                    "Helper turn_psu_on not found, disabling PSUControl integration"
+                )
+                self.psucontrol_enabled = False
+        else:
+            self._logger.info("PSUControl helpers not found")
+            self.psucontrol_enabled = False
+
+        # Camera support
+        self.snapshot_enabled = self._settings.global_get(
+            ["webcam", "timelapseEnabled"]
+        )
+        if self.snapshot_enabled:
+            self.snapshot_path = self._settings.global_get(["webcam", "snapshot"])
+            if not self.snapshot_path:
+                self.snapshot_enabled = False
+
         if not self.update_timer:
             self.update_timer = RepeatedTimer(60, self.handle_timer, None, None, False)
 
@@ -455,7 +504,10 @@ class HomeassistantPlugin(
                 },
             )
             self._generate_sensor(
-                topic=_discovery_topic + "/sensor/" + _node_id + "_CHAMBER_TARGET/config",
+                topic=_discovery_topic
+                + "/sensor/"
+                + _node_id
+                + "_CHAMBER_TARGET/config",
                 values={
                     "name": _node_name + " Chamber Target",
                     "uniq_id": _node_id + "_CHAMBER_TARGET",
@@ -534,19 +586,19 @@ class HomeassistantPlugin(
         try:
             data["progress"]["printTimeLeftFormatted"] = str(
                 datetime.timedelta(seconds=int(data["progress"]["printTimeLeft"]))
-            )
+            ).split(".")[0]
         except:
             data["progress"]["printTimeLeftFormatted"] = None
         try:
             data["progress"]["printTimeFormatted"] = str(
                 datetime.timedelta(seconds=data["progress"]["printTime"])
-            )
+            ).split(".")[0]
         except:
             data["progress"]["printTimeFormatted"] = None
         try:
             data["job"]["estimatedPrintTimeFormatted"] = str(
                 datetime.timedelta(seconds=data["job"]["estimatedPrintTime"])
-            )
+            ).split(".")[0]
         except:
             data["job"]["estimatedPrintTimeFormatted"] = None
 
@@ -567,6 +619,20 @@ class HomeassistantPlugin(
             self.mqtt_publish(
                 self._generate_topic("hassTopic", "Connected", full=True),
                 state_connected,
+                allow_queueing=True,
+            )
+
+    def _generate_psu_state(self, psu_state=None):
+        if self.psucontrol_enabled:
+            if psu_state is None:
+                psu_state = self.get_psu_state()
+                self._logger.debug(
+                    "No psu_state specified, state retrieved from helper: "
+                    + str(psu_state)
+                )
+            self.mqtt_publish(
+                self._generate_topic("hassTopic", "psu_state", full=True),
+                str(psu_state),
                 allow_queueing=True,
             )
 
@@ -605,6 +671,31 @@ class HomeassistantPlugin(
                 sarge.run(shutdown_command, async_=True)
             except Exception as e:
                 self._logger.info("Unable to run shutdown command: " + str(e))
+
+    def _on_psu(self, topic, message, retained=None, qos=None, *args, **kwargs):
+        message = message.decode()
+        self._logger.debug("PSUControl message received: " + message)
+        if message == "True":
+            self._logger.info("Turning on PSU")
+            self.turn_psu_on()
+        else:
+            self._logger.info("Turning off PSU")
+            self.turn_psu_off()
+
+    def _on_camera(self, topic, message, retained=None, qos=None, *args, **kwargs):
+        self._logger.debug("Camera snapshot message received: " + str(message))
+        if self.snapshot_enabled:
+            import urllib.request as urlreq
+
+            url_handle = urlreq.urlopen(self.snapshot_path)
+            file_content = url_handle.read()
+            url_handle.close()
+            self.mqtt_publish(
+                self._generate_topic("baseTopic", "camera", full=True),
+                file_content,
+                allow_queueing=False,
+                raw_data=True,
+            )
 
     def _on_home(self, topic, message, retained=None, qos=None, *args, **kwargs):
         self._logger.debug("Homing printer: " + str(message))
@@ -741,6 +832,66 @@ class HomeassistantPlugin(
             },
         )
 
+        # PSUControl
+        if self.psucontrol_enabled:
+            if subscribe:
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "psu", full=True),
+                    self._on_psu,
+                )
+
+            self._generate_sensor(
+                topic=_discovery_topic + "/switch/" + _node_id + "_PSU/config",
+                values={
+                    "name": _node_name + " PSU",
+                    "uniq_id": _node_id + "_PSU",
+                    "cmd_t": "~" + self._generate_topic("controlTopic", "psu"),
+                    "stat_t": "~" + self._generate_topic("hassTopic", "psu_state"),
+                    "pl_on": "True",
+                    "pl_off": "False",
+                    "device": _config_device,
+                    "ic": "mdi:flash",
+                },
+            )
+
+        # Camera output
+        if self.snapshot_enabled:
+            if subscribe:
+                self.mqtt_subscribe(
+                    self._generate_topic("controlTopic", "camera_snapshot", full=True),
+                    self._on_camera,
+                )
+
+            self._generate_sensor(
+                topic=_discovery_topic
+                + "/switch/"
+                + _node_id
+                + "_CAMERA_SNAPSHOT/config",
+                values={
+                    "name": _node_name + " Camera snapshot",
+                    "uniq_id": _node_id + "_CAMERA_SNAPSHOT",
+                    "cmd_t": "~"
+                    + self._generate_topic("controlTopic", "camera_snapshot"),
+                    "stat_t": "~"
+                    + self._generate_topic("controlTopic", "camera_snapshot"),
+                    "pl_off": "False",
+                    "pl_on": "True",
+                    "val_tpl": "{{False}}",
+                    "device": _config_device,
+                    "ic": "mdi:camera-iris",
+                },
+            )
+
+            self._generate_sensor(
+                topic=_discovery_topic + "/camera/" + _node_id + "_CAMERA/config",
+                values={
+                    "name": _node_name + " Camera",
+                    "uniq_id": _node_id + "_CAMERA",
+                    "device": _config_device,
+                    "topic": self._generate_topic("baseTopic", "camera"),
+                },
+            )
+
         # Command topics that don't have a suitable sensor configuration. These can be used
         # through the MQTT.publish service call though.
         if subscribe:
@@ -767,7 +918,11 @@ class HomeassistantPlugin(
                 Events.ERROR,
                 Events.PRINTER_STATE_CHANGED,
             ),
-            files=(Events.FILE_SELECTED, Events.FILE_DESELECTED),
+            files=(
+                Events.FILE_SELECTED,
+                Events.FILE_DESELECTED,
+                Events.CAPTURE_DONE,
+            ),
             status=(
                 Events.PRINT_STARTED,
                 Events.PRINT_FAILED,
@@ -832,6 +987,23 @@ class HomeassistantPlugin(
                 self._generate_topic("hassTopic", "is_paused", full=True),
                 "False",
                 allow_queueing=True,
+            )
+
+        if (
+            event == Events.PLUGIN_PSUCONTROL_PSU_STATE_CHANGED
+            and self.psucontrol_enabled
+        ):
+            self._generate_psu_state(payload["psu_state"])
+
+        if event == Events.CAPTURE_DONE:
+            file_handle = open(payload["file"], "rb")
+            file_content = file_handle.read()
+            file_handle.close()
+            self.mqtt_publish(
+                self._generate_topic("baseTopic", "camera", full=True),
+                file_content,
+                allow_queueing=False,
+                raw_data=True,
             )
 
     ##~~ ProgressPlugin API
